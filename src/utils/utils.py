@@ -8,13 +8,15 @@ import os
 import pickle
 import json
 
-GRAPH_EXT = '.dbg'
+GRAPH_EXT = '.labeled_dbg'
 
 def get_dbgs_from_dir(indir: str, infile_ext: str = GRAPH_EXT) -> list[object]:
     dbgs = []
     for filename in os.listdir(indir):
         if os.path.splitext(filename)[1] == infile_ext:
-            dbg = pickle.load(filename)
+            file_abs = os.path.abspath(os.path.join(indir, filename))
+            with open(file_abs, 'rb') as f:
+                dbg = pickle.load(f)
             dbgs.append(dbg)
     return dbgs
 
