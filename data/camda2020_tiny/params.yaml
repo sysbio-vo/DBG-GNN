@@ -1,0 +1,15 @@
+k: 4
+
+utad.weighted_directed_edges:
+  k: 4
+  stride: 1
+  inlcudeUNK: False
+  disable_tqdm: False
+
+utad.build_deBruijn_graph:
+  normalise: True
+  remove_N: True
+  create_all_kmers: False
+  disable_tqdm: False
+  y_label: int_label
+
