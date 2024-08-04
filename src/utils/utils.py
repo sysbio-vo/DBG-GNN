@@ -37,7 +37,7 @@ def get_reads_from_gzed_fq(gzed_fq_path: str) -> list[str]:
     return reads
 
 
-def parse_train_labels(data_path: str, outdir: str = None, 
+def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
                        data_exts: tuple[str] = ('.gz', '.fastq', '.fasta', '.fq', '.fa')) -> tuple[dict, dict]:
     unique_codes = set()
 
@@ -68,12 +68,12 @@ def parse_train_labels(data_path: str, outdir: str = None,
         id_to_code_outfile = 'id_to_code.json'
         code_to_id_outfile = 'code_to_id.json'
 
+    if save_to_json:
+        with open(id_to_code_outfile, 'w') as f:
+            json.dump(id_to_code, f)
 
-    with open(id_to_code_outfile, 'w') as f:
-        json.dump(id_to_code, f)
-
-    with open(code_to_id_outfile, 'w') as f:
-        json.dump(code_to_id, f)
+        with open(code_to_id_outfile, 'w') as f:
+            json.dump(code_to_id, f)
 
     return id_to_code, code_to_id
     
