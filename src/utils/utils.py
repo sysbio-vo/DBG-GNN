@@ -7,6 +7,8 @@ import gzip
 import os
 import pickle
 import json
+import logging
+import functools
 
 GRAPH_EXT = '.labeled_dbg'
 
@@ -21,9 +23,11 @@ def get_dbgs_from_dir(indir: str, infile_ext: str = GRAPH_EXT) -> list[object]:
     return dbgs
 
 def get_reads_from_fq(fq_path: str) -> list[str]:
+    print(f'getting reads from {fq_path} DEBUG')
     reads = []
     with open(fq_path, 'r') as f:
         fastq_reads = f.readlines()
+        print(f'{len(fastq_reads) = } DEBUG')
         for i in range(0, len(fastq_reads), 4):
             reads.append(str(fastq_reads[i + 1].rstrip()))
     return reads
@@ -38,16 +42,18 @@ def get_reads_from_gzed_fq(gzed_fq_path: str) -> list[str]:
 
 
 def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
-                       data_exts: tuple[str] = ('.gz', '.fastq', '.fasta', '.fq', '.fa')) -> tuple[dict, dict]:
+                       data_exts: tuple[str] = ('fastq.gz', 'fastq', 'fasta', 'fq', 'fa')) -> tuple[dict, dict]:
     unique_codes = set()
 
     for sample in os.listdir(data_path):
         sample_filename = os.path.basename(sample)
-        sample_ext = os.path.splitext(sample_filename)[1]
+        # sample_ext = os.path.splitext(sample_filename)[1]
+        sample_ext = sample_filename.split(os.extsep, 1)[-1]
         if sample_ext not in data_exts:
             continue
 
         # Example: CAMDA20_MetaSUB_CSD16_BCN_012_1_kneaddata_subsampled_20_percent.fastq
+        print(f'{sample_filename = } DEBUG')
         city_id = list(sample_filename.split('_'))[3]
 
         unique_codes.add(city_id)
@@ -78,6 +84,30 @@ def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
     return id_to_code, code_to_id
     
             
+
+def timestamps(logger):
+    """
+    Decorator factory to log function start and finish timestamps.
+
+    Parameters
+    ----------
+    logger : logging.Logger
+        Logger to use.
+
+    Returns
+    -------
+    timestamps_decorator : func
+        Decorator that uses the provided logger to output timestamps. 
+    """
+    def timestamps_decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            logger.info(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} started {func.__name__}')
+            res = func(*args, **kwargs)
+            logger.info(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} finished {func.__name__}')
+            return res
+        return wrapper
+    return timestamps_decorator
 
 
 class GraphsDataset(Dataset):
