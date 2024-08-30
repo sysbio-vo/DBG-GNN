@@ -1,16 +1,23 @@
+import os
+import datetime
+import json
+import pickle
+import gzip
+import functools
+import logging
+import tqdm
+
 import networkx as nx
 import matplotlib.pyplot as plt
-from torch.utils.data import Dataset
-import sqlite3
-import tqdm
-import gzip
-import os
-import pickle
-import json
-import logging
-import functools
 
-GRAPH_EXT = '.labeled_dbg'
+from torch.utils.data import Dataset
+
+
+GRAPH_EXT = '.labeled_dbg_max'
+LOGGER_CONFIGURATION = {
+    'format': '%(asctime)s %(levelname)-8s %(funcName)s %(message)s',
+    'datefmt': '%d %h %Y %H:%M:%S'
+}
 
 def get_dbgs_from_dir(indir: str, infile_ext: str = GRAPH_EXT) -> list[object]:
     dbgs = []
@@ -23,11 +30,9 @@ def get_dbgs_from_dir(indir: str, infile_ext: str = GRAPH_EXT) -> list[object]:
     return dbgs
 
 def get_reads_from_fq(fq_path: str) -> list[str]:
-    print(f'getting reads from {fq_path} DEBUG')
     reads = []
     with open(fq_path, 'r') as f:
         fastq_reads = f.readlines()
-        print(f'{len(fastq_reads) = } DEBUG')
         for i in range(0, len(fastq_reads), 4):
             reads.append(str(fastq_reads[i + 1].rstrip()))
     return reads
@@ -53,7 +58,6 @@ def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
             continue
 
         # Example: CAMDA20_MetaSUB_CSD16_BCN_012_1_kneaddata_subsampled_20_percent.fastq
-        print(f'{sample_filename = } DEBUG')
         city_id = list(sample_filename.split('_'))[3]
 
         unique_codes.add(city_id)
@@ -83,9 +87,8 @@ def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
 
     return id_to_code, code_to_id
     
-            
 
-def timestamps(logger):
+def timestamps(logger: logging.Logger):
     """
     Decorator factory to log function start and finish timestamps.
 
@@ -128,11 +131,9 @@ def break_into_kmers(sequence: str, k: int = 4):
 
 def build_DBG(sequences: list[str], k: int = 4):
     dbg = nx.DiGraph()
-    print(f'{len(sequences) = }')
     for i in tqdm.tqdm(range(0, len(sequences)), desc='Reads in sample'):
         seq = sequences[i]
         k_mers = break_into_kmers(seq, k)
-        # print(f'{len(k_mers) = }')
 
         for i in range(len(k_mers) - 1):
             parent = k_mers[i]
@@ -151,7 +152,3 @@ def visualize_de_bruijn_graph(graph):
 
     plt.title('De Bruijn Graph')
     plt.show()
- 
-
-
-

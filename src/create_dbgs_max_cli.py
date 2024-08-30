@@ -19,6 +19,9 @@ from torch_geometric.utils.convert import from_networkx
 from multiprocessing import Pool
 
 
+logging.basicConfig(**ut.LOGGER_CONFIGURATION)
+logger = logging.getLogger(__name__)
+
 DNA_ALPHABET = ('A', 'T', 'G', 'C')
 DNA5_ALPHABET = ('A', 'T', 'G', 'C', 'N')
 
@@ -35,10 +38,12 @@ def get_args():
         help='sub k-mer length to initialize node features')
     parser.add_argument('-N', '--skip_N',
         help='skip k-mers with padding nucleotide N', action='store_true')
-    parser.add_argument('-o', '--outdir', type=pathlib.Path,
-        help='output directory to store DBGs')
     parser.add_argument('-n', '--normalization_method', choices=['avg', 'max'],
         help='edge weight normalization method', default='max')
+    parser.add_argument('-t', '--threads', type=int, default=4,
+        help='number of threads to build graphs in parallel')
+    parser.add_argument('-o', '--outdir', type=pathlib.Path,
+        help='output directory to store DBGs')
     parser.add_argument('-v', '--verbose', 
         help='verbosity level', action='count', default=0)
 
@@ -95,19 +100,22 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
     reads_for_samples = {} # dict
     id_to_code, code_to_id = ut.parse_train_labels(data_path=indir, save_to_json=False) # id_to_code not used here
     num_classes = len(code_to_id)
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} {num_classes = }')
+    # logger.info(f'{num_classes = }')
+    logging.info(f'{num_classes = }')
+    
     files_in_dir = os.listdir(indir)
 
     # TODO: use tqdm
     # TODO: improve logging
     for file in files_in_dir:
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} processing file {file}')
+        # logger.info(f'processing file {file}')
+        logging.info(f'processing file {file}')
         skip_based_on_filesize = False
         if filesize_lim_mb:
             skip_based_on_filesize = os.path.getsize(os.path.join(indir, file)) / (1024.0 * 1024.0) > filesize_lim_mb
 
         if os.path.splitext(file)[1] != '.fastq' or skip_based_on_filesize:
-            print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} skipping {file}')
+            logger.info(f'skipping {file}')
             continue
 
         city_code = os.path.basename(file).split('_')[3] # TODO: specific to CAMDA dataset
@@ -115,11 +123,11 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
 
         int_label = int(code_to_id[city_code])
 
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} {city_code = } ; {int_label = }')
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} getting reads')
+        logger.info(f'{city_code = } ; {int_label = }')
+        logger.info(f'getting reads')
 
         reads = ut.get_reads_from_fq(os.path.join(indir, file))
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} saving labelled reads')
+        logger.info(f'saving labelled reads')
 
         if sample_name not in reads_for_samples:
             reads_for_samples[sample_name] = [int_label, reads]
@@ -136,12 +144,16 @@ def get_normalization_val(data: Iterable[int], method: str = 'avg') -> float:
         return np.sum(data_np)
     elif method == 'max':
         return np.max(data_np)
+    else:
+        raise ValueError(f'Normalization method {method} is not recognized.')
 
 def build_graph_max(dict_item, 
                     skip_N: bool = True, outdir: str = None, 
                     kmer_len: int = 4,
                     subkmer_len: int = 2,
-                    normalization_method: str = 'max'
+                    normalization_method: str = 'max',
+                    savefile_ext: str = None,
+                    log_every_n_reads: int = 100_000,
                     ) -> None:
     """Build a DBG from an entry of form `(sample_name, [int_city_code, [read_1, read_2, ...]])`.
 
@@ -168,27 +180,27 @@ def build_graph_max(dict_item,
     None
     """
     sample_name, code_and_reads = dict_item
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} processing {sample_name}')
+    logger.info(f'processing {sample_name}')
     city_code, seqs = code_and_reads
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} {city_code = }')
+    logger.info(f'{city_code = }')
 
     G = nx.DiGraph()
     kmers = set()
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} getting k-mers from {len(seqs)} reads')
+    logger.info(f'{sample_name}: getting k-mers from {len(seqs)} reads')
     transition_counts = defaultdict(int)
 
     # TODO: use tqdm
     for idx, seq in enumerate(seqs):
-        if idx % 1_000_00 == 0:
-            print(f'processed {idx} reads')
+        if (idx + 1) % log_every_n_reads == 0:
+            logger.info(f'{sample_name}: processed {idx} reads')
         kmers_in_read = generate_kmers(seq, kmer_len, skip_N)
         kmers = kmers.union(set(kmers_in_read))
         for kk in range(len(kmers_in_read) - 1):
             transition_counts[(kmers_in_read[kk], kmers_in_read[kk + 1])] += 1
     nodes = []
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} adding nodes to graph')
+    logger.info(f'{sample_name}: adding nodes to graph')
     if skip_N:
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} skipping padding nucleotide')
+        logger.info(f'{sample_name}: skipping padding nucleotide')
         for kmer in kmers:
             if 'N' not in kmer:
                 nodes.append(
@@ -198,7 +210,7 @@ def build_graph_max(dict_item,
                     )
                 )
     else:
-        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} not skipping padding nucleotide')
+        logger.info(f'{sample_name}: not skipping padding nucleotide')
         for kmer in kmers:
             nodes.append(
                 (
@@ -208,44 +220,51 @@ def build_graph_max(dict_item,
             )
     G.add_nodes_from(nodes)
 
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} normalizing by transition count by {normalization_method}')
+    logger.info(f'{sample_name}: normalizing transition count by {normalization_method}')
     normalization_val = get_normalization_val(transition_counts.values(), method=normalization_method)
 
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} adding edges')
+    logger.info(f'{sample_name}: adding edges')
     for key in transition_counts.keys():
         G.add_edge(key[0], key[1], weight=transition_counts[key] / normalization_val)
 
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} saving as torch graph')
+    logger.info(f'{sample_name}: saving as torch graph')
     torch_graph = from_networkx(G)
     torch_graph['y'] = torch.tensor([city_code])
 
-    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} saving graph for sample {sample_name}')
+    logger.info(f'{sample_name}: saving graph for sample {sample_name}')
 
+    savefile_ext = savefile_ext if savefile_ext else ut.GRAPH_EXT
     outfile_graph_name = (
-        os.path.join(outdir, sample_name + '.labeled_graph_max') 
+        os.path.join(outdir, sample_name + savefile_ext) 
         if outdir 
-        else sample_name + '.labeled_graph_max'
+        else sample_name + savefile_ext
     )
 
     with open(outfile_graph_name, 'wb') as f:
         pickle.dump(torch_graph, f)
 
+# TODO: move to utils
+def get_verbosity_level(int_level: int) -> int:
+    # reverse order based on the number of `v`s provided in command line
+    if int_level == 0:
+        return logging.WARNING
+    elif int_level == 1:
+        return logging.INFO
+    elif int_level == 2:
+        return logging.DEBUG
+    return logging.DEBUG
+
 def main():
 
     args = get_args()
+    logger.setLevel(level=get_verbosity_level(args.verbose))
 
-    # TODO: replace vanilla prints with proper logging
-    logging.basicConfig()
-    logger = logging.getLogger("create_dbgs")
-    logger.setLevel(args.verbose * 10)
-
-    print(f'Creating {args.outdir = } DEBUG')
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
     genome_sequences = get_labeled_reads_from_dir_with_samples(args.indir)
 
-    with Pool(processes = 6) as p:
+    with Pool(processes = args.threads) as p:
         build_graph_max_wrapper = functools.partial(build_graph_max, skip_N=args.skip_N, outdir=args.outdir,
                                                     kmer_len=args.kmer_len, subkmer_len=args.subkmer_len, 
                                                     normalization_method=args.normalization_method)
