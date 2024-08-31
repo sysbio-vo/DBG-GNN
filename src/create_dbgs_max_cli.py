@@ -1,10 +1,10 @@
 import os
-import datetime
 import pickle
 import functools
 import argparse
 import pathlib
 import logging
+# from tqdm import tqdm # TODO: use correctly with multiprocessing
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 
@@ -26,9 +26,8 @@ DNA_ALPHABET = ('A', 'T', 'G', 'C')
 DNA5_ALPHABET = ('A', 'T', 'G', 'C', 'N')
 
 def get_args():
-    '''
-    Get args from the command line
-    '''
+    """Get DBG construction args from the command line using argparse.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--indir', type=pathlib.Path,
         help='directory with samples')
@@ -100,16 +99,14 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
     reads_for_samples = {} # dict
     id_to_code, code_to_id = ut.parse_train_labels(data_path=indir, save_to_json=False) # id_to_code not used here
     num_classes = len(code_to_id)
-    # logger.info(f'{num_classes = }')
-    logging.info(f'{num_classes = }')
+    logger.info(f'{num_classes = }')
     
     files_in_dir = os.listdir(indir)
 
     # TODO: use tqdm
     # TODO: improve logging
     for file in files_in_dir:
-        # logger.info(f'processing file {file}')
-        logging.info(f'processing file {file}')
+        logger.info(f'processing file {file}')
         skip_based_on_filesize = False
         if filesize_lim_mb:
             skip_based_on_filesize = os.path.getsize(os.path.join(indir, file)) / (1024.0 * 1024.0) > filesize_lim_mb
@@ -243,27 +240,19 @@ def build_graph_max(dict_item,
     with open(outfile_graph_name, 'wb') as f:
         pickle.dump(torch_graph, f)
 
-# TODO: move to utils
-def get_verbosity_level(int_level: int) -> int:
-    # reverse order based on the number of `v`s provided in command line
-    if int_level == 0:
-        return logging.WARNING
-    elif int_level == 1:
-        return logging.INFO
-    elif int_level == 2:
-        return logging.DEBUG
-    return logging.DEBUG
+
 
 def main():
 
     args = get_args()
-    logger.setLevel(level=get_verbosity_level(args.verbose))
+    logger.setLevel(ut.get_verbosity_level(args.verbose))
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
     genome_sequences = get_labeled_reads_from_dir_with_samples(args.indir)
 
+    # TODO: use tqdm here instead of inside of functions
     with Pool(processes = args.threads) as p:
         build_graph_max_wrapper = functools.partial(build_graph_max, skip_N=args.skip_N, outdir=args.outdir,
                                                     kmer_len=args.kmer_len, subkmer_len=args.subkmer_len, 

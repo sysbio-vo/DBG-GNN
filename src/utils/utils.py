@@ -19,6 +19,16 @@ LOGGER_CONFIGURATION = {
     'datefmt': '%d %h %Y %H:%M:%S'
 }
 
+def get_verbosity_level(int_level: int) -> int:
+    # reverse order based on the number of `v`s provided in command line
+    if int_level == 0:
+        return logging.WARNING
+    elif int_level == 1:
+        return logging.INFO
+    elif int_level == 2:
+        return logging.DEBUG
+    return logging.DEBUG
+
 def get_dbgs_from_dir(indir: str, infile_ext: str = GRAPH_EXT) -> list[object]:
     dbgs = []
     for filename in os.listdir(indir):
