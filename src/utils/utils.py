@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 
 
-GRAPH_EXT = '.labeled_dbg_max'
+GRAPH_EXT = '.labeled_dbg'
 LOGGER_CONFIGURATION = {
     'format': '%(asctime)s %(levelname)-8s %(funcName)s %(message)s',
     'datefmt': '%d %h %Y %H:%M:%S'

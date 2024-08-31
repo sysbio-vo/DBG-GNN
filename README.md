@@ -13,7 +13,7 @@ conda activate GNNs
 ## DBG construction
 To build de Bruijn graphs supplied with node and edge features, run:
 ```bash
-python create_dbgs_max_cli.py \
+python create_dbgs_cli.py \
 --indir /path/to/dir/with/samples \
 --outdir /path/to/outdir \
 --kmer_len 4 \
