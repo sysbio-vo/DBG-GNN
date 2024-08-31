@@ -158,6 +158,7 @@ def main():
 
     # training loop
     model_savefile = args.outfile
+    os.makedirs(os.path.dirname(model_savefile), exist_ok=True) # create parent dirs for the model savefile
     train_loss_record = []
     train_acc_record = []
     val_acc_record = []
@@ -187,6 +188,8 @@ Train Acc: {train_acc:.4f}, Val Acc: {val_acc:.4f}')
     losses_fig = plut.plot_in_row([train_loss_record, train_acc_record, val_acc_record], 
                                   titles=['Train Loss', 'Train Accuracy', 'Validation Accuracy'])
     losses_fig.savefig(plot_filename)
+
+    logger.info(f'Finished training a graph model. Bye :)')
 
 
 if __name__ == '__main__':

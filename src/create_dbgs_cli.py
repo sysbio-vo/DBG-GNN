@@ -93,6 +93,10 @@ def subkmer_frequencies_in_kmer(kmer: int, subkmer_length: int, skip_N: bool = T
         frequencies[index] = count
     return frequencies
 
+def subkmer_frequencies_in_kmer_positioned(kmer: int, subkmer_length: int, skip_N: bool = True) -> np.array:
+    # TODO: add sub-kmer position information to the embedding
+    pass
+
 def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None) -> dict:
     """
     """
@@ -188,7 +192,7 @@ def build_graph_max(dict_item,
 
     # TODO: use tqdm
     for idx, seq in enumerate(seqs):
-        if (idx + 1) % log_every_n_reads == 0:
+        if idx % log_every_n_reads == 0:
             logger.info(f'{sample_name}: processed {idx} reads')
         kmers_in_read = generate_kmers(seq, kmer_len, skip_N)
         kmers = kmers.union(set(kmers_in_read))
@@ -247,8 +251,7 @@ def main():
     args = get_args()
     logger.setLevel(ut.get_verbosity_level(args.verbose))
 
-    if not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
+    os.makedirs(args.outdir, exist_ok=True)
 
     genome_sequences = get_labeled_reads_from_dir_with_samples(args.indir)
 
@@ -258,6 +261,8 @@ def main():
                                                     kmer_len=args.kmer_len, subkmer_len=args.subkmer_len, 
                                                     normalization_method=args.normalization_method)
         build_graph_max_result = p.map(build_graph_max_wrapper, genome_sequences.items()) # not used
+
+    logger.info(f'Finished building graphs. Goodbye :)')
 
 if __name__ == '__main__':
     main()
