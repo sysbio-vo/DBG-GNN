@@ -1,6 +1,9 @@
 # DBG-GNN
 This repo provides a toolset for building de Bruijn graphs enhanced with various edge and node features as well as versatile graph learning options.
 
+> [!WARNING]
+> The code here is under development. Bugs are possible.
+
 # Usage
 
 Before running the scripts, create and activate the environment with a PyTorch version suitable for your machine. You can try to use provided `yaml` file, but no guarantees that would work for you:
