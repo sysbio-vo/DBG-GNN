@@ -1,41 +1,35 @@
 #! /bin/bash
 
-# MODIFY: set your paths here
-CONDAPATH=/home/lbombini/micromamba/bin
+: '
+The script is to be run from the directory containing pairs of fastq
+that are intended to be interleaved.
+'
+# MODIFY: set conda start path
 CONDASTARTPATH=/home/lbombini/micromamba/etc/profile.d
-source $CONDASTARTPATH/micromamba.sh
-
-
-# MODIFY: activate env with seqkit
-echo "activating conda env"
-micromamba activate gnn
-
-
-# MODIFY: set proportion of reads to subsample
-export PROPORTION_TO_TAKE=0.2
+# MODIFY: set the conda env name with BBmap installed
+CONDAENV="gnn"
+# MODIFY: set in sample suffix (e.g. pop_1{SUFFIX}.fastq)
+export SUFFIX="_subsampled_20_percent"
 # MODIFY: set outdir with a unique name
-export OUTPATH=subsampled_vk11
+export OUTDIR="../merged_vk11"
 
-mkdir -p $OUTPATH
+source $CONDASTARTPATH/micromamba.sh
+micromamba activate ${CONDAENV}
+mkdir -p ${OUTDIR}
 
-# MODIFY: (optionally) 
-# set datetime after which downloaded samples will be ignored 
-# (to not process partially downloaded files)
-export DATETIME="2024-08-08 00:00:00"
-
-process_sample() {
+interleave_fastq() {
     fwd_path="$1"
     fwd=$(basename "$fwd_path")
-    fwd_out=${OUTPATH}/${fwd%.fastq.gz}_subsampled_20_percent.fastq
+    indir=$(dirname "$fwd_path")
 
-    dir=$(dirname "$fwd_path")
+    rev="${fwd/_1${SUFFIX}.fastq/_2${SUFFIX}.fastq}"
+    rev_path="${indir}/${rev}"
 
-    rev="${fwd/_1.fastq.gz/_2.fastq.gz}"
-    rev_path="${dir}/${rev}"
-    rev_out=${OUTPATH}/${rev%.fastq.gz}_subsampled_20_percent.fastq
+    merged="${fwd/_1${SUFFIX}.fastq/${SUFFIX}_interleaved.fastq}"
+    merged_path="${OUTDIR}/${merged}"
 
     # check if the valid output already exists
-    if [ -f "$fwd_out" ] && [ -s "$fwd_out" ] && [ -f "$rev_out" ] && [ -s "$rev_out" ]; then
+    if [ -f "$merged_path" ] && [ -s "$merged_path" ]; then
         echo "${fwd_out} and its pair already exist. Skipping the pair."
         return 0
     fi
@@ -52,23 +46,9 @@ process_sample() {
         return 1
     fi
 
-    seed=$RANDOM
-    echo "Subsampling $fwd  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
-    seqkit sample -p $PROPORTION_TO_TAKE $fwd_path -o $fwd_out -s $seed
-    
-    echo "Subsampling $rev  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
-    seqkit sample -p $PROPORTION_TO_TAKE $rev_path -o $rev_out -s $seed
+    echo "Interleaving ${fwd} and ${rev}"
+    micromamba run -n gnn reformat.sh in1=$fwd_path in2=$rev_path out=$merged_path
 }
 
-export -f process_sample
-
-# process fastq.gz files from the current dir
-find . -name "*_1.fastq.gz" -type f | parallel process_sample
-
-
-# # build graphs
-# echo "activating gnn env"
-# conda activate gnn
-# pushd /home/nepotlet/DBG-GNN/src/
-# python create_dbgs_max.py
-# popd
+export -f interleave_fastq
+find . -name "*_1${SUFFIX}.fastq" -type f | parallel interleave_fastq
