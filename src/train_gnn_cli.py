@@ -27,8 +27,8 @@ os.environ['TORCH'] = torch.__version__
 logging.basicConfig(**ut.LOGGER_CONFIGURATION)
 logger = logging.getLogger(__name__)
 
-logger.debug(f'Running torch version {torch.__version__}')
-logger.debug(f'CUDA is available: {torch.cuda.is_available()}')
+logger.info(f'Running torch version {torch.__version__}')
+logger.info(f'CUDA is available: {torch.cuda.is_available()}')
 
 def get_args():
     """Get training args from the command line using argparse.

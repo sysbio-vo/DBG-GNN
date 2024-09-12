@@ -64,7 +64,7 @@ def generate_kmers(sequence: str, k: int, skip_N: bool = True) -> list:
     return kmers
 
 
-def kmer_to_index(kmer: int, skip_N: bool = True) -> int:
+def kmer_to_index(kmer: str, skip_N: bool = True) -> int:
     """Converts a kmer (string) to an index.
     """
     if skip_N:
@@ -80,7 +80,7 @@ def kmer_to_index(kmer: int, skip_N: bool = True) -> int:
         index = num_bases * index + base_to_index[char]
     return index
 
-def subkmer_frequencies_in_kmer(kmer: int, subkmer_length: int, skip_N: bool = True) -> np.array:
+def subkmer_frequencies_in_kmer(kmer: str, subkmer_length: int, skip_N: bool = True) -> np.array:
     """Calculate the frequency of each sub-k-mer in a k-mer.
     """
     subkmer_counts = Counter(kmer[i:i + subkmer_length] for i in range(len(kmer) - subkmer_length + 1))
@@ -94,9 +94,72 @@ def subkmer_frequencies_in_kmer(kmer: int, subkmer_length: int, skip_N: bool = T
         frequencies[index] = count
     return frequencies
 
-def subkmer_frequencies_in_kmer_positioned(kmer: int, subkmer_length: int, skip_N: bool = True) -> np.array:
+def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_length: int, skip_N: bool = True) -> np.array:
+    """Test naive prototype implementation of sub-k-mer frequencies enhanced with their positional information
+    as initial node embeddings.
+
+    The idea is the following. Consier an example of `k = 5`, `sub_k = 2`.
+    Take this k-mer: **ATGGG**
+    Let's assume for simplicity the following index mapping of the sub-kmers: 
+    {   'AA': 0,
+        'AC': 1,
+        'AG': 2,
+        'AT': 3,
+        'CA': 4,
+        'CC': 5,
+        'CG': 6,
+        'CT': 7,
+        'GA': 8,
+        'GC': 9,
+        'GT': 10,
+        'GG': 11,
+        'TA': 12,
+        'TC': 13,
+        'TT': 14,
+        'TG': 15
+    }
+
+    ATGGG -> AT(3), TG(15), GG(11), GG(11)
+
+    Usual subkmer-frequency-based embedding for the k-mer in this case is: 
+    [0, 0, 1, 0, ..., 2, ..., 1, 0 ]
+           ^          ^       ^
+           |          |       |
+         idx=3        11      15
+
+    
+    I propose doing the following:
+    positional_information = np.arange(1, k) = [1, 2, 3, 4]
+
+    Then we multiple each bitvector representing a sub-kmer by the corresponding positional number
+    to obtain the following embedding:
+    positionally_resolved_AT = [0, 0, 1, 0, ..., 0] * 1 = [0, 0, 1, 0, ..., 0]
+    positionally_resolved_TG = [0, 0, 0, 0, ..., 1, 0] * 2 = [0, 0, 0, 0, ..., 2, 0]
+    positionally_resolved_GG = [0, ..., 1, ..., 0, 0] * 3 + [0, ..., 1, ..., 0, 0] * 4 = [0, ..., 7, ..., 0, 0]
+
+    So that the final k-mer embedding looks as follows:
+    [0, 0, 1, 0, ..., 7, ..., 2, 0]
+           ^          ^       ^
+           |          |       |
+         idx=3        11      15
+
+    TODO: try out normalizing the resulting array
+
+    """
     # TODO: add sub-kmer position information to the embedding
-    pass
+    if skip_N:
+        positionally_resolved_frequenies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
+    else:
+        positionally_resolved_frequenies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+
+    positional_weights = np.arange(1, len(kmer))
+    for i in range(len(kmer) - subkmer_length + 1):
+        subkmer = kmer[i:i + subkmer_length]
+        subkmer_idx = kmer_to_index(subkmer)
+        positionally_resolved_frequenies[subkmer_idx] += positional_weights[i]
+
+    return positionally_resolved_frequenies
+
 
 def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None) -> dict:
     """
