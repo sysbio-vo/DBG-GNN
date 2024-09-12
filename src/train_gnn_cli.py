@@ -20,6 +20,8 @@ from multiprocessing import Pool
 
 import model_zoo as mz
 
+import json
+
 os.environ['TORCH'] = torch.__version__
 
 logging.basicConfig(**ut.LOGGER_CONFIGURATION)
@@ -129,6 +131,9 @@ def validate(model, validation_loader):
 
 def main():
     args = get_args()
+    params_out = os.path.join(args.outfile.parent, "parameters.json")
+    with open(params_out, "w") as out: 
+        json.dump(vars(args), out, indent=4)
     logger.setLevel(ut.get_verbosity_level(args.verbose))
 
 

@@ -18,6 +18,7 @@ from torch_geometric.utils.convert import from_networkx
 
 from multiprocessing import Pool
 
+import json
 
 logging.basicConfig(**ut.LOGGER_CONFIGURATION)
 logger = logging.getLogger(__name__)
@@ -249,6 +250,9 @@ def build_graph_max(dict_item,
 def main():
 
     args = get_args()
+    params_out = os.path.join(args.outdir, "parameters.json")
+    with open(params_out, "w") as out: 
+        json.dump(vars(args), out, indent=4)
     logger.setLevel(ut.get_verbosity_level(args.verbose))
 
     os.makedirs(args.outdir, exist_ok=True)
