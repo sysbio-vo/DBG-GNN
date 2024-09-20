@@ -1,28 +1,27 @@
 import os
+import json
+import torch
 import pickle
-import functools
-import argparse
-import pathlib
 import logging
-# from tqdm import tqdm # TODO: use correctly with multiprocessing
-from collections import Counter, defaultdict
-from collections.abc import Iterable
+import pathlib
+import argparse
+import functools
 
 import numpy as np
 import networkx as nx
-
 import utils.utils as ut
 
-import torch
+# from tqdm import tqdm # TODO: use correctly with multiprocessing
+from multiprocessing import Pool
+from collections.abc import Iterable
+from collections import Counter, defaultdict
 from torch_geometric.utils.convert import from_networkx
 
-from multiprocessing import Pool
-
-import json
 
 logging.basicConfig(**ut.LOGGER_CONFIGURATION)
 logger = logging.getLogger(__name__)
 
+# TODO: move constants to utils
 DNA_ALPHABET = ('A', 'T', 'G', 'C')
 DNA5_ALPHABET = ('A', 'T', 'G', 'C', 'N')
 
@@ -45,7 +44,7 @@ def get_args():
     parser.add_argument('-o', '--outdir', type=pathlib.Path,
         help='output directory to store DBGs')
     parser.add_argument('-v', '--verbose', 
-        help='verbosity level', action='count', default=0)
+        help='verbosity level', action='count', default=0) # TODO: add different levels of logging
 
     args = parser.parse_args()
     return args

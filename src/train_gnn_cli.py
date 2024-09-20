@@ -1,26 +1,20 @@
 import os
-import datetime
-import logging
+import json
+import torch
 import pickle
-import argparse
-import pathlib
 import random
+import logging
+import pathlib
+import argparse
 
-import networkx as nx
-
+import model_zoo as mz
 import utils.utils as ut
-import utils.utils_adopted as utad
 import utils.plotting_utils as plut
 
-import torch
+from multiprocessing import Pool
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils.convert import to_networkx, from_networkx
 
-from multiprocessing import Pool
-
-import model_zoo as mz
-
-import json
 
 os.environ['TORCH'] = torch.__version__
 
@@ -69,7 +63,7 @@ def get_args():
         help='path to save training plots to')
     
     parser.add_argument('-v', '--verbose', 
-        help='verbosity level', action='count', default=0)
+        help='verbosity level', action='count', default=0)  # TODO: add different levels of logging
 
     args = parser.parse_args()
     return args
@@ -143,7 +137,7 @@ def main():
     graphs_num = len(graphs)
 
     # TODO: use cli args
-    random.shuffle(graphs)
+    random.shuffle(graphs) # TODO: use seed
     split_value = args.train_split
 
     train_dataset = graphs[:int(graphs_num * split_value)]
