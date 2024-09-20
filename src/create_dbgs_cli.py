@@ -38,7 +38,7 @@ def get_args():
         help='sub k-mer length to initialize node features')
     parser.add_argument('-N', '--skip_N',
         help='skip k-mers with padding nucleotide N', action='store_true')
-    parser.add_argument('-n', '--normalization_method', choices=['avg', 'max'],
+    parser.add_argument('-n', '--normalization_method', choices=['sum', 'max'],
         help='edge weight normalization method', default='max')
     parser.add_argument('-t', '--threads', type=int, default=4,
         help='number of threads to build graphs in parallel')
@@ -203,9 +203,9 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
 
 
 # TODO: move to util
-def get_normalization_val(data: Iterable[int], method: str = 'avg') -> float:
+def get_normalization_val(data: Iterable[int], method: str = 'sum') -> float:
     data_np = np.array(list(data))
-    if method == 'avg':
+    if method == 'sum':
         return np.sum(data_np)
     elif method == 'max':
         return np.max(data_np)
@@ -219,6 +219,7 @@ def build_graph_max(dict_item,
                     normalization_method: str = 'max',
                     savefile_ext: str = None,
                     log_every_n_reads: int = 100_000,
+                    edge_weight_dtype: torch.dtype = torch.float32
                     ) -> None:
     """Build a DBG from an entry of form `(sample_name, [int_city_code, [read_1, read_2, ...]])`.
 
@@ -239,6 +240,10 @@ def build_graph_max(dict_item,
 
     outdir : str, default: None
         Directory to save constructed DBGs to. Saves to the current folder if not specified.
+
+    edge_weight_dtype : torch.dtype, default: torch.float32
+        Data type for the edge weight. Allows you to control precision. **Currently only torch.float32 is supported.**
+        TODO: make tunable. 
 
     Returns
     -------
@@ -286,11 +291,13 @@ def build_graph_max(dict_item,
     G.add_nodes_from(nodes)
 
     logger.info(f'{sample_name}: normalizing transition count by {normalization_method}')
+    # TODO: normalize only by the weights aggregated from a source node, not from the whole graph
     normalization_val = get_normalization_val(transition_counts.values(), method=normalization_method)
 
-    logger.info(f'{sample_name}: adding edges')
+    logger.info(f'{sample_name}: adding edges with edge weights of precision {edge_weight_dtype}')
     for key in transition_counts.keys():
-        G.add_edge(key[0], key[1], weight=transition_counts[key] / normalization_val)
+        G.add_edge(key[0], key[1], 
+                   weight=torch.as_tensor(transition_counts[key] / normalization_val, dtype=edge_weight_dtype))
 
     logger.info(f'{sample_name}: saving as torch graph')
     torch_graph = from_networkx(G)

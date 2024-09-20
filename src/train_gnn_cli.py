@@ -27,8 +27,8 @@ os.environ['TORCH'] = torch.__version__
 logging.basicConfig(**ut.LOGGER_CONFIGURATION)
 logger = logging.getLogger(__name__)
 
-logger.info(f'Running torch version {torch.__version__}')
-logger.info(f'CUDA is available: {torch.cuda.is_available()}')
+logger.debug(f'Running torch version {torch.__version__}')
+logger.debug(f'CUDA is available: {torch.cuda.is_available()}')
 
 def get_args():
     """Get training args from the command line using argparse.
@@ -194,8 +194,7 @@ Train Acc: {train_acc:.4f}, Val Acc: {val_acc:.4f}')
                                   titles=['Train Loss', 'Train Accuracy', 'Validation Accuracy'])
     losses_fig.savefig(plot_filename)
 
-    logger.info(f'Finished training a graph model. Bye :)')
-
+    logger.info(f'Finished training GNN. Goodbye :)')
 
 if __name__ == '__main__':
     main()
