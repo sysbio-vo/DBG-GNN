@@ -1,4 +1,5 @@
 import random
+import functools
 import networkx as nx
 import numpy as np
 import torch
@@ -18,27 +19,45 @@ import datetime
 from multiprocessing import Process, Pool
 
 # Function to generate k-mers from a sequence
-def generate_kmers(sequence, k):
-    return [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
+def generate_kmers(sequence, k, skip_N=True):
+    kmers =  [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
+    if skip_N:
+        filtered_kmers = []
+        for kmer in kmers:
+            if 'N' not in kmer:
+                filtered_kmers.append(kmer)
+        return filtered_kmers
+    return kmers
 
-def kmer_to_index(kmer):
+    # return [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
+
+def kmer_to_index(kmer, skip_N=True):
     """Converts a kmer (string) to an index."""
-    base_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
     index = 0
-    for char in kmer:
-        index = 5 * index + base_to_index[char]
+    if skip_N:
+        base_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+        for char in kmer:
+            index = 4 * index + base_to_index[char]
+    else:
+        base_to_index = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
+        for char in kmer:
+            index = 5 * index + base_to_index[char]
     return index
 
-def subkmer_frequencies_in_kmer(kmer, subkmer_length):
+def subkmer_frequencies_in_kmer(kmer, subkmer_length, skip_N=True):
     """Calculates the frequency of each subkmer in a kmer."""
     subkmer_counts = Counter(kmer[i:i+subkmer_length] for i in range(len(kmer) - subkmer_length + 1))
-    frequencies = np.zeros(5**subkmer_length)
+    if skip_N:
+        frequencies = np.zeros(4**subkmer_length)
+    else:
+        frequencies = np.zeros(5**subkmer_length)
+
     for subkmer, count in subkmer_counts.items():
         index = kmer_to_index(subkmer)
         frequencies[index] = count
     return frequencies
 
-id_to_code, code_to_id = ut.parse_train_labels(data_path='/home/sysbio/camda2020/camda2020_tiny/filtered_subsampled', save_to_json=False)
+id_to_code, code_to_id = ut.parse_train_labels(data_path='/home/nepotlet/camda2020/camda2020/subsampled_no_kneaddata', save_to_json=False)
 
 num_classes = len(code_to_id)
 
@@ -50,7 +69,8 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb = 500) -
     files_in_dir = os.listdir(indir)
     for file in files_in_dir:
         print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} processing file {file}')
-        if os.path.splitext(file)[1] != '.fastq' or os.path.getsize(os.path.join(indir, file)) / (1024 * 1024.0) > filesize_lim_mb:
+        # if os.path.splitext(file)[1] != '.fastq' or os.path.getsize(os.path.join(indir, file)) / (1024 * 1024.0) > filesize_lim_mb:
+        if os.path.splitext(file)[1] != '.fastq':
             print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} skipping {file}')
             continue
         city_code = os.path.basename(file).split('_')[3]
@@ -67,19 +87,19 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb = 500) -
     return reads_for_samples
         
 
-genome_sequences = get_labeled_reads_from_dir_with_samples('/home/sysbio/camda2020/camda2020_tiny/filtered_subsampled',
+genome_sequences = get_labeled_reads_from_dir_with_samples('/home/nepotlet/camda2020/camda2020/subsampled_no_kneaddata',
                                                           700)
 
-outdir = '/home/sysbio/DBG-GNN/data/camda2020_tiny_max'
+outdir = '/home/nepotlet/camda2020/camda2020/subsampled_no_kneaddata/dbgs_no_kneaddata_skip_N_normalized_sum_kmerlen_6_subkmerlen_2'
 if not os.path.exists(outdir):
     os.makedirs(outdir)
 
 graphs = []
-kmer_len = 4
+kmer_len = 6
 subkmer_len = 2
-num_features = 5**subkmer_len
+num_features = 4**subkmer_len
 
-def build_graph_max(dict_item):
+def build_graph_max(dict_item, skip_N=True):
     sample_name, code_and_reads = dict_item
     print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} processing {sample_name}')
     city_code, seqs = code_and_reads
@@ -89,26 +109,38 @@ def build_graph_max(dict_item):
     print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} getting k-mers from {len(seqs)} reads')
     transition_counts = defaultdict(int)
     for idx, seq in enumerate(seqs):
-        if idx % 1_000_000 == 0:
+        if idx % 1_000_00 == 0:
             print(f'processed {idx} reads')
-        kmers_in_read = generate_kmers(seq, kmer_len)
+        kmers_in_read = generate_kmers(seq, kmer_len, skip_N)
         kmers = kmers.union(set(kmers_in_read))
         for kk in range(len(kmers_in_read) - 1):
             transition_counts[(kmers_in_read[kk], kmers_in_read[kk + 1])] += 1
     nodes = []
     print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} adding nodes to graph')
-    for kmer in kmers:
-        nodes.append((kmer, {"x": torch.as_tensor(subkmer_frequencies_in_kmer(kmer, subkmer_len)/(kmer_len-1), dtype=torch.float32)}))
+    if skip_N:
+        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} skipping padding nucleotide')
+        for kmer in kmers:
+            if 'N' not in kmer:
+                nodes.append((kmer, {"x": torch.as_tensor(subkmer_frequencies_in_kmer(kmer, subkmer_len, skip_N)/(kmer_len-1), dtype=torch.float32)}))
+    else:
+        print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} not skipping padding nucleotide')
+        for kmer in kmers:
+            nodes.append((kmer, {"x": torch.as_tensor(subkmer_frequencies_in_kmer(kmer, subkmer_len, skip_N)/(kmer_len-1), dtype=torch.float32)}))
     G.add_nodes_from(nodes)
     # edges = []
     # transition_counts = defaultdict(int)
     # print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} calculating transition counts')
     # for i in range(len(kmers)-1):
     #     transition_counts[(kmers[i], kmers[i+1])] += 1
-    max_count = max(transition_counts.values())
+
+
+    # normalization_val = max(transition_counts.values())
+    
+    print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} normalizing by sum transition count')
+    normalization_val = np.sum(np.array(list(transition_counts.values())))
     print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} adding edges')
     for key in transition_counts.keys():
-        G.add_edge(key[0], key[1], weight=transition_counts[key]/max_count)
+        G.add_edge(key[0], key[1], weight=transition_counts[key]/normalization_val)
     #     edges.append((kmers[i], kmers[i+1]))
     # G.add_edges_from(edges)
     print(f'{datetime.datetime.now().strftime("%d %h %Y %H:%M:%S")} saving as torch graph')
@@ -122,6 +154,7 @@ def build_graph_max(dict_item):
 
 
 if __name__ == '__main__':
-    with Pool(processes = 5) as p:
-        build_graph_max_result = p.map(build_graph_max, genome_sequences.items())
+    with Pool(processes = 6) as p:
+        build_graph_max_wrapper = functools.partial(build_graph_max, skip_N=True)
+        build_graph_max_result = p.map(build_graph_max_wrapper, genome_sequences.items())
 
