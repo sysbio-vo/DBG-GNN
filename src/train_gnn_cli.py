@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 logger.debug(f'Running torch version {torch.__version__}')
 logger.debug(f'CUDA is available: {torch.cuda.is_available()}')
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
 def get_args():
     """Get training args from the command line using argparse.
     """
@@ -100,14 +103,19 @@ def train(model, optimizer, criterion, train_loader):
     total_loss = 0
     correct = 0
     for data in train_loader:
+        # use GPU
+        data = data.to(device)
+
         optimizer.zero_grad()
         out = model(data.x, data.edge_index, data.weight, data.batch)
         loss = criterion(out, data.y)
         loss.backward()
         optimizer.step()
+
         total_loss += loss.item()
         pred = out.argmax(dim=1)
         correct += (pred == data.y).sum().item()
+
     return total_loss / len(train_loader), correct / len(train_loader.dataset)
     
 
@@ -115,6 +123,9 @@ def validate(model, validation_loader):
     model.eval()
     correct = 0
     for data in validation_loader:
+        # use GPU
+        data = data.to(device)
+
         with torch.no_grad():
             out = model(data.x, data.edge_index, data.weight, data.batch)
             pred = out.argmax(dim=1)
@@ -126,8 +137,16 @@ def validate(model, validation_loader):
 def main():
     args = get_args()
     params_out = os.path.join(args.outfile.parent, "parameters.json")
-    with open(params_out, "w") as out: 
-        json.dump(vars(args), out, indent=4)
+    os.makedirs(args.outfile.parent, exist_ok=True)
+    with open(params_out, "w") as out:
+
+        def to_str_if_posix_path(val):
+            if isinstance(val, pathlib.Path):
+                return str(val)
+            return val
+
+        args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
+        json.dump(args_str, out, indent=4)
     logger.setLevel(ut.get_verbosity_level(args.verbose))
 
 
@@ -143,14 +162,18 @@ def main():
     train_dataset = graphs[:int(graphs_num * split_value)]
     val_dataset = graphs[int(graphs_num * split_value):]
 
-    train_loader = DataLoader(train_dataset, batch_size=args.train_batch_size, shuffle=args.shuffle_train)
-    val_loader = DataLoader(val_dataset, batch_size=args.validation_batch_size, shuffle=args.shuffle_validation)
+    train_loader = DataLoader(train_dataset, batch_size=args.train_batch_size, shuffle=args.shuffle_train, 
+                              pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.validation_batch_size, shuffle=args.shuffle_validation, 
+                            pin_memory=True)
 
     num_node_features = get_num_node_features(graphs[0])
     num_classes = len(city_codes_in_dataset)
 
     model = mz.GCN(num_features=num_node_features, num_classes=num_classes, 
                    hidden_channels=32, seed=args.seed)
+    
+    model.to(device) # load model to GPU
     
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
