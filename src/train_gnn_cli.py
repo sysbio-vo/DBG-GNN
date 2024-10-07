@@ -54,7 +54,7 @@ def get_args():
         help="optimizer's learning rate")
     parser.add_argument('-n', '--n_epochs', type=int, default=3_000,
         help='number of training epochs')
-    parser.add_argument('-pn', '--log_every_n_epochs', type=int, default=300,
+    parser.add_argument('-pn', '--log_every_n_epochs', type=int, default=100,
         help='print loss values every num of epochs')
     parser.add_argument('-sn', '--save_every_n_epochs', type=int, default=1_000,
         help='save (update) model every num of epochs')
@@ -170,8 +170,9 @@ def main():
     num_node_features = get_num_node_features(graphs[0])
     num_classes = len(city_codes_in_dataset)
 
-    model = mz.GCN(num_features=num_node_features, num_classes=num_classes, 
-                   hidden_channels=32, seed=args.seed)
+    model = mz.GCN_MLP(num_features=num_node_features, num_classes=num_classes, 
+                       mlp_layers=4, mlp_hidden_channels=128, 
+                       hidden_channels=32, seed=args.seed)
     
     model.to(device) # load model to GPU
     
