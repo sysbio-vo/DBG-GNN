@@ -147,8 +147,8 @@ def main():
 
         args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
         json.dump(args_str, out, indent=4)
-    logger.setLevel(ut.get_verbosity_level(args.verbose))
 
+    logger.setLevel(ut.get_verbosity_level(args.verbose))
 
     logger.info(f'Loading DBGs from folder {args.indir}')
     graphs, city_codes_in_dataset = read_graphs_from_dir(args.indir) # TODO: unite with similar function from utils
@@ -156,11 +156,22 @@ def main():
     graphs_num = len(graphs)
 
     # TODO: use cli args
-    random.shuffle(graphs) # TODO: use seed
+    random.Random(args.seed).shuffle(graphs)
     split_value = args.train_split
 
     train_dataset = graphs[:int(graphs_num * split_value)]
     val_dataset = graphs[int(graphs_num * split_value):]
+
+    # DEBUG
+    train_cities_debug = set()
+    for gr in train_dataset:
+        train_cities_debug.add(gr.y[0].item())
+
+    test_cities_debug = set()
+    for gr in val_dataset:
+        test_cities_debug.add(gr.y[0].item())
+
+    logger.info(f'{train_cities_debug = } DEBUG {test_cities_debug = } DEBUG {test_cities_debug.difference(train_cities_debug) = } DEBUG')
 
     train_loader = DataLoader(train_dataset, batch_size=args.train_batch_size, shuffle=args.shuffle_train, 
                               pin_memory=True)
@@ -170,9 +181,14 @@ def main():
     num_node_features = get_num_node_features(graphs[0])
     num_classes = len(city_codes_in_dataset)
 
+    # DEBUG
+    # test different models here
     model = mz.GCN_MLP(num_features=num_node_features, num_classes=num_classes, 
-                       mlp_layers=4, mlp_hidden_channels=128, 
+                       mlp_hidden_channels=128,
                        hidden_channels=32, seed=args.seed)
+
+    # model = mz.GCN(num_features=num_node_features, num_classes=num_classes, 
+    #                hidden_channels=32, seed=args.seed)
     
     model.to(device) # load model to GPU
     
