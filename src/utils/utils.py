@@ -6,6 +6,7 @@ import gzip
 import functools
 import logging
 import tqdm
+import pathlib
 
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -18,6 +19,18 @@ LOGGER_CONFIGURATION = {
     'format': '%(asctime)s %(levelname)-8s %(funcName)s %(message)s',
     'datefmt': '%d %h %Y %H:%M:%S'
 }
+
+def save_run_params_to_json(args, outfile: str='parameters.json') -> None:
+    params_out = os.path.join(args.outfile.parent, "parameters.json")
+    os.makedirs(args.outfile.parent, exist_ok=True)
+
+    with open(params_out, "w") as out:
+        def to_str_if_posix_path(val):
+            if isinstance(val, pathlib.Path):
+                return str(val)
+            return val
+        args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
+        json.dump(args_str, out, indent=4)
 
 def get_verbosity_level(int_level: int) -> int:
     # reverse order based on the number of `v`s provided in command line

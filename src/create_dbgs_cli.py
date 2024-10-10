@@ -39,6 +39,10 @@ def get_args():
         help='skip k-mers with padding nucleotide N', action='store_true')
     parser.add_argument('-n', '--normalization_method', choices=['sum', 'max'],
         help='edge weight normalization method', default='max')
+    parser.add_argument('-f', '--node_feature_method', choices=['subkmer_freq', 'subkmer_freq_positional'],
+        help='node feature initialization method', default='subkmer_freq')
+    parser.add_argument('-m', '--normalize_node_features',
+        help='normalize node features', action='store_true')
     parser.add_argument('-t', '--threads', type=int, default=4,
         help='number of threads to build graphs in parallel')
     parser.add_argument('-o', '--outdir', type=pathlib.Path,
@@ -79,85 +83,113 @@ def kmer_to_index(kmer: str, skip_N: bool = True) -> int:
         index = num_bases * index + base_to_index[char]
     return index
 
-def subkmer_frequencies_in_kmer(kmer: str, subkmer_length: int, skip_N: bool = True) -> np.array:
-    """Calculate the frequency of each sub-k-mer in a k-mer.
-    """
-    subkmer_counts = Counter(kmer[i:i + subkmer_length] for i in range(len(kmer) - subkmer_length + 1))
-    if skip_N:
-        frequencies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
-    else:
-        frequencies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+# TODO: move to a separate module
+def node_feature_method_selector(method_name: str, *args, **kwargs):
 
-    for subkmer, count in subkmer_counts.items():
-        index = kmer_to_index(subkmer, skip_N=skip_N)
-        frequencies[index] = count
-    return frequencies
+    # define different feature calculation methods here
 
-def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_length: int, skip_N: bool = True) -> np.array:
-    """Test naive prototype implementation of sub-k-mer frequencies enhanced with their positional information
-    as initial node embeddings.
+    # "subkmer_freq"
+    def subkmer_frequencies_in_kmer(kmer: str, subkmer_length: int, skip_N: bool = True, 
+    normalize: bool = True) -> np.array:
+        """Calculate the frequency of each sub-k-mer in a k-mer.
+        """
+        subkmer_counts = Counter(kmer[i:i + subkmer_length] for i in range(len(kmer) - subkmer_length + 1))
+        if skip_N:
+            frequencies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
+        else:
+            frequencies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
 
-    The idea is the following. Consier an example of `k = 5`, `sub_k = 2`.
-    Take this k-mer: **ATGGG**
-    Let's assume for simplicity the following index mapping of the sub-kmers: 
-    {   'AA': 0,
-        'AC': 1,
-        'AG': 2,
-        'AT': 3,
-        'CA': 4,
-        'CC': 5,
-        'CG': 6,
-        'CT': 7,
-        'GA': 8,
-        'GC': 9,
-        'GT': 10,
-        'GG': 11,
-        'TA': 12,
-        'TC': 13,
-        'TT': 14,
-        'TG': 15
-    }
+        for subkmer, count in subkmer_counts.items():
+            index = kmer_to_index(subkmer, skip_N=skip_N)
+            frequencies[index] = count
 
-    ATGGG -> AT(3), TG(15), GG(11), GG(11)
+        if normalize:
+            frequencies = frequencies / (len(kmer) - 1)
 
-    Usual subkmer-frequency-based embedding for the k-mer in this case is: 
-    [0, 0, 1, 0, ..., 2, ..., 1, 0 ]
-           ^          ^       ^
-           |          |       |
-         idx=3        11      15
-
+        return frequencies
     
-    I propose doing the following:
-    positional_information = np.arange(1, k) = [1, 2, 3, 4]
+    # "subkmer_freq_positional"
+    def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_length: int, skip_N: bool = True, 
+                                            normalize: bool = False) -> np.array:
+        """Test naive prototype implementation of sub-k-mer frequencies enhanced with their positional information
+        as initial node embeddings.
 
-    Then we multiple each bitvector representing a sub-kmer by the corresponding positional number
-    to obtain the following embedding:
-    positionally_resolved_AT = [0, 0, 1, 0, ..., 0] * 1 = [0, 0, 1, 0, ..., 0]
-    positionally_resolved_TG = [0, 0, 0, 0, ..., 1, 0] * 2 = [0, 0, 0, 0, ..., 2, 0]
-    positionally_resolved_GG = [0, ..., 1, ..., 0, 0] * 3 + [0, ..., 1, ..., 0, 0] * 4 = [0, ..., 7, ..., 0, 0]
+        The idea is the following. Consier an example of `k = 5`, `sub_k = 2`.
+        Take this k-mer: **ATGGG**
+        Let's assume for simplicity the following index mapping of the sub-kmers: 
+        {   'AA': 0,
+            'AC': 1,
+            'AG': 2,
+            'AT': 3,
+            'CA': 4,
+            'CC': 5,
+            'CG': 6,
+            'CT': 7,
+            'GA': 8,
+            'GC': 9,
+            'GT': 10,
+            'GG': 11,
+            'TA': 12,
+            'TC': 13,
+            'TT': 14,
+            'TG': 15
+        }
 
-    So that the final k-mer embedding looks as follows:
-    [0, 0, 1, 0, ..., 7, ..., 2, 0]
-           ^          ^       ^
-           |          |       |
-         idx=3        11      15
+        ATGGG -> AT(3), TG(15), GG(11), GG(11)
 
-    TODO: try out normalizing the resulting array
+        Usual subkmer-frequency-based embedding for the k-mer in this case is: 
+        [0, 0, 1, 0, ..., 2, ..., 1, 0 ]
+            ^          ^       ^
+            |          |       |
+            idx=3        11      15
 
-    """
-    # TODO: add sub-kmer position information to the embedding
-    if skip_N:
-        positionally_resolved_frequenies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
-    else:
-        positionally_resolved_frequenies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+        
+        I propose doing the following:
+        positional_information = np.arange(1, k) = [1, 2, 3, 4]
 
-    positional_weights = np.arange(1, len(kmer))
-    for i in range(len(kmer) - subkmer_length + 1):
-        subkmer = kmer[i:i + subkmer_length]
-        subkmer_idx = kmer_to_index(subkmer)
-        positionally_resolved_frequenies[subkmer_idx] += positional_weights[i]
+        Then we multiple each bitvector representing a sub-kmer by the corresponding positional number
+        to obtain the following embedding:
+        positionally_resolved_AT = [0, 0, 1, 0, ..., 0] * 1 = [0, 0, 1, 0, ..., 0]
+        positionally_resolved_TG = [0, 0, 0, 0, ..., 1, 0] * 2 = [0, 0, 0, 0, ..., 2, 0]
+        positionally_resolved_GG = [0, ..., 1, ..., 0, 0] * 3 + [0, ..., 1, ..., 0, 0] * 4 = [0, ..., 7, ..., 0, 0]
 
-    return positionally_resolved_frequenies
+        So that the final k-mer embedding looks as follows:
+        [0, 0, 1, 0, ..., 7, ..., 2, 0]
+            ^          ^       ^
+            |          |       |
+            idx=3        11      15
+
+        TODO: try out normalizing the resulting array
+
+        """
+        # TODO: add sub-kmer position information to the embedding
+        if skip_N:
+            positionally_resolved_frequenies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
+        else:
+            positionally_resolved_frequenies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+
+        positional_weights = np.arange(1, len(kmer))
+        for i in range(len(kmer) - subkmer_length + 1):
+            subkmer = kmer[i:i + subkmer_length]
+            subkmer_idx = kmer_to_index(subkmer)
+            positionally_resolved_frequenies[subkmer_idx] += positional_weights[i]
+
+        if normalize:
+            positionally_resolved_frequenies = positionally_resolved_frequenies / np.linalg.norm(positionally_resolved_frequenies)
+        return positionally_resolved_frequenies
+
+    # return needed method
+    picked_method = subkmer_frequencies_in_kmer # default
+
+    match method_name:
+        case 'subkmer_freq':
+            picked_method = subkmer_frequencies_in_kmer
+        case 'subkmer_freq_positional':
+            picked_method = subkmer_frequencies_in_kmer_positioned
+
+    return functools.partial(picked_method, *args, **kwargs)
+
+        
 
 
 def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None) -> dict:
@@ -218,13 +250,15 @@ def build_graph_max(dict_item,
                     normalization_method: str = 'max',
                     savefile_ext: str = None,
                     log_every_n_reads: int = 100_000,
-                    edge_weight_dtype: torch.dtype = torch.float32
+                    edge_weight_dtype: torch.dtype = torch.float32,
+                    node_feature_method: str = 'subkmer_freq',
+                    normalize_node_features: bool = True,
                     ) -> None:
     """Build a DBG from an entry of form `(sample_name, [int_city_code, [read_1, read_2, ...]])`.
 
     Parameters
     ----------
-    dict_item : tuple[int, list[str]]
+    dict_item : tuple[str, list[str]]
         Tuple with read sequences in a single sample. The first element is the name of the sample.
         Second element is a list consisting of 2 elements: integer city code of the sample and list of read sequences.
     
@@ -244,10 +278,23 @@ def build_graph_max(dict_item,
         Data type for the edge weight. Allows you to control precision. **Currently only torch.float32 is supported.**
         TODO: make tunable. 
 
+    node_feature_method : str, default: 'subkmer_freq'
+        Node feature initialization method.
+    
+    normalize_node_features : bool, default : True
+
+
     Returns
     -------
     None
     """
+
+    # select node feature calculation method
+    logger.info(f'using node feature calculation method: {node_feature_method}')
+    feature_method = node_feature_method_selector(node_feature_method, subkmer_len=subkmer_len, 
+    skip_N=skip_N, normalize=normalize_node_features)
+
+
     sample_name, code_and_reads = dict_item
     logger.info(f'processing {sample_name}')
     city_code, seqs = code_and_reads
@@ -275,7 +322,7 @@ def build_graph_max(dict_item,
                 nodes.append(
                     (
                     kmer, 
-                    {"x": torch.as_tensor(subkmer_frequencies_in_kmer(kmer, subkmer_len, skip_N) / (kmer_len - 1), dtype=torch.float32)}
+                    {"x": torch.as_tensor(feature_method(kmer), dtype=torch.float32)}
                     )
                 )
     else:
@@ -284,7 +331,7 @@ def build_graph_max(dict_item,
             nodes.append(
                 (
                 kmer, 
-                {"x": torch.as_tensor(subkmer_frequencies_in_kmer(kmer, subkmer_len, skip_N) / (kmer_len - 1), dtype=torch.float32)}
+                {"x": torch.as_tensor(feature_method(kmer), dtype=torch.float32)}
                 )
             )
     G.add_nodes_from(nodes)
@@ -301,6 +348,7 @@ def build_graph_max(dict_item,
     logger.info(f'{sample_name}: saving as torch graph')
     torch_graph = from_networkx(G)
     torch_graph['y'] = torch.tensor([city_code])
+    torch_graph['sample_name'] = sample_name
 
     logger.info(f'{sample_name}: saving graph for sample {sample_name}')
 
@@ -320,11 +368,20 @@ def main():
 
     args = get_args()
     params_out = os.path.join(args.outdir, "parameters.json")
-    with open(params_out, "w") as out: 
-        json.dump(vars(args), out, indent=4)
-    logger.setLevel(ut.get_verbosity_level(args.verbose))
-
     os.makedirs(args.outdir, exist_ok=True)
+
+    # TODO: use utils functions
+    with open(params_out, "w") as out: 
+        def to_str_if_posix_path(val):
+            if isinstance(val, pathlib.Path):
+                return str(val)
+            return val
+
+        args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
+        json.dump(args_str, out, indent=4)
+
+    logger.setLevel(ut.get_verbosity_level(args.verbose))
+    
 
     genome_sequences = get_labeled_reads_from_dir_with_samples(args.indir)
 
@@ -332,7 +389,9 @@ def main():
     with Pool(processes = args.threads) as p:
         build_graph_max_wrapper = functools.partial(build_graph_max, skip_N=args.skip_N, outdir=args.outdir,
                                                     kmer_len=args.kmer_len, subkmer_len=args.subkmer_len, 
-                                                    normalization_method=args.normalization_method)
+                                                    normalization_method=args.normalization_method, 
+                                                    node_feature_method=args.node_feature_method, 
+                                                    normalize_node_features=args.normalize_node_features)
         build_graph_max_result = p.map(build_graph_max_wrapper, genome_sequences.items()) # not used
 
     logger.info(f'Finished building graphs. Goodbye :)')

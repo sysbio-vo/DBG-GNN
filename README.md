@@ -23,6 +23,8 @@ python create_dbgs_cli.py \
 --subkmer_len 2 \
 --skip_N \
 --normalization_method max \
+--node_feature_method subkmer_freq_positional \
+--normalize_node_features \
 --threads 4 \
 --verbose
 ```
