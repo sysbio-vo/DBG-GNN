@@ -1,38 +1,40 @@
 #! /bin/bash
 
 # MODIFY: set your paths here
-CONDAPATH=/home/lbombini/micromamba/bin
-CONDASTARTPATH=/home/lbombini/micromamba/etc/profile.d
-source $CONDASTARTPATH/micromamba.sh
+CONDAPATH=/home/nepotlet/miniconda3/bin
+CONDASTARTPATH=/home/nepotlet/miniconda3/etc/profile.d
+source $CONDASTARTPATH/conda.sh
 
 
 # MODIFY: activate env with seqkit
 echo "activating conda env"
-micromamba activate gnn
+conda activate kneaddata
+
+# INPUTS
+export INDIR=/scratch/sysbio/camda2020/camda2020/fastp_vk11 # TODO: use complete data
+export PROPORTION_TO_TAKE=0.2 # MODIFY: set proportion of reads to subsample
+export OUTDIR=/scratch2/sysbio/qced_data # MODIFY: set outdir with a unique name
+export PAIRED_SAMPLENAME_SUFFIX=_trimmed
 
 
-# MODIFY: set proportion of reads to subsample
-export PROPORTION_TO_TAKE=0.2
-# MODIFY: set outdir with a unique name
-export OUTPATH=subsampled_vk11
-
-mkdir -p $OUTPATH
+export PROPORTION_INT=$(echo "$PROPORTION_TO_TAKE * 100 / 1" | bc)
+mkdir -p $OUTDIR
 
 # MODIFY: (optionally) 
 # set datetime after which downloaded samples will be ignored 
 # (to not process partially downloaded files)
-export DATETIME="2024-08-08 00:00:00"
+# export DATETIME="2024-08-08 00:00:00"
 
 process_sample() {
     fwd_path="$1"
     fwd=$(basename "$fwd_path")
-    fwd_out=${OUTPATH}/${fwd%.fastq.gz}_subsampled_20_percent.fastq
+    fwd_out=${OUTDIR}/${fwd%.fastq.gz}_subsampled_${PROPORTION_INT}_percent.fastq
 
     dir=$(dirname "$fwd_path")
 
-    rev="${fwd/_1.fastq.gz/_2.fastq.gz}"
+    rev="${fwd/_1${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz/_2${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz}"
     rev_path="${dir}/${rev}"
-    rev_out=${OUTPATH}/${rev%.fastq.gz}_subsampled_20_percent.fastq
+    rev_out=${OUTDIR}/${rev%.fastq.gz}_subsampled_${PROPORTION_INT}_percent.fastq
 
     # check if the valid output already exists
     if [ -f "$fwd_out" ] && [ -s "$fwd_out" ] && [ -f "$rev_out" ] && [ -s "$rev_out" ]; then
@@ -41,34 +43,27 @@ process_sample() {
     fi
 
     # check if the pair exists
-    if [ ! -f "$rev" ]; then
-        echo "R2 for ${fwd} has not been found. Skipping the pair"
+    if [ ! -f "$rev_path" ]; then
+        echo "R2 for ${fwd_path} has not been found. Skipping the pair"
         return 1
     fi
 
     # check if not empty
-    if [ ! -s "$fwd" ] || [ ! -s "$rev" ]; then
-        echo "Either $fwd or its pair is empty. Skipping the pair"
+    if [ ! -s "$fwd_path" ] || [ ! -s "$rev_path" ]; then
+        echo "Either $fwd_path or its pair is empty. Skipping the pair"
         return 1
     fi
 
     seed=$RANDOM
-    echo "Subsampling $fwd  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
+    echo "Subsampling $fwd_path  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
     seqkit sample -p $PROPORTION_TO_TAKE $fwd_path -o $fwd_out -s $seed
     
-    echo "Subsampling $rev  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
+    echo "Subsampling $rev_path  Proportion: $PROPORTION_TO_TAKE  Seed: ${seed}"
     seqkit sample -p $PROPORTION_TO_TAKE $rev_path -o $rev_out -s $seed
 }
 
 export -f process_sample
 
-# process fastq.gz files from the current dir
-find . -name "*_1.fastq.gz" -type f | parallel process_sample
-
-
-# # build graphs
-# echo "activating gnn env"
-# conda activate gnn
-# pushd /home/nepotlet/DBG-GNN/src/
-# python create_dbgs_max.py
-# popd
+# process ${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz files from the input dir
+echo "processing samples from $INDIR"
+find $INDIR -name "*_1${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz" -type f | parallel process_sample
