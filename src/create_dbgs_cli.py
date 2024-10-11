@@ -252,6 +252,26 @@ def samples_from_indir(indir: str, supported_sample_exts: tuple=('.fastq',)) -> 
     
     return sample_files, code_to_id
 
+def filter_out_built_graphs(sample_paths: list[str], outdir: str):
+
+    # DEBUG function
+
+    filtered_samples = []
+    for sample in sample_paths:
+        sample_basename = os.path.basename(sample)
+        sample_no_ext = os.path.splitext(sample_basename)[0]
+        built_graph_path = sample_no_ext + '.labeled_dbg'
+        built_graph_full_path = os.path.join(outdir, built_graph_path)
+
+        print(f'{built_graph_full_path = } DEBUG')
+        if os.path.exists(built_graph_full_path):
+            print(f'{built_graph_full_path} skipping')
+            continue
+        print(f'{built_graph_full_path} using')
+        filtered_samples.append(sample)
+
+    return filtered_samples
+
 def get_labelled_reads_from_file(sample: str, code_to_id: dict):
     """Get reads from a fastq or gzed fastq sample and get sample location integer id.  
     """
@@ -429,6 +449,9 @@ def main():
 
     logger.info(f'getting samples from {args.indir}')
     sample_paths, city_code_to_id = samples_from_indir(args.indir)
+
+    logger.info(f'filtering out samples with already built graphs')
+    sample_paths = filter_out_built_graphs(sample_paths, args.outdir)
 
     logger.info(f'building graph in parallel with {args.threads} threads')
     # TODO: use tqdm here instead of inside of functions
