@@ -89,15 +89,15 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
     # define different feature calculation methods here
 
     # "subkmer_freq"
-    def subkmer_frequencies_in_kmer(kmer: str, subkmer_length: int, skip_N: bool = True, 
+    def subkmer_frequencies_in_kmer(kmer: str, subkmer_len: int, skip_N: bool = True, 
     normalize: bool = True) -> np.array:
         """Calculate the frequency of each sub-k-mer in a k-mer.
         """
-        subkmer_counts = Counter(kmer[i:i + subkmer_length] for i in range(len(kmer) - subkmer_length + 1))
+        subkmer_counts = Counter(kmer[i:i + subkmer_len] for i in range(len(kmer) - subkmer_len + 1))
         if skip_N:
-            frequencies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
+            frequencies = np.zeros(len(DNA_ALPHABET)**subkmer_len)
         else:
-            frequencies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+            frequencies = np.zeros(len(DNA5_ALPHABET)**subkmer_len)
 
         for subkmer, count in subkmer_counts.items():
             index = kmer_to_index(subkmer, skip_N=skip_N)
@@ -109,7 +109,7 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
         return frequencies
     
     # "subkmer_freq_positional"
-    def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_length: int, skip_N: bool = True, 
+    def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_len: int, skip_N: bool = True, 
                                             normalize: bool = False) -> np.array:
         """Test naive prototype implementation of sub-k-mer frequencies enhanced with their positional information
         as initial node embeddings.
@@ -164,13 +164,13 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
         """
         # TODO: add sub-kmer position information to the embedding
         if skip_N:
-            positionally_resolved_frequenies = np.zeros(len(DNA_ALPHABET)**subkmer_length)
+            positionally_resolved_frequenies = np.zeros(len(DNA_ALPHABET)**subkmer_len)
         else:
-            positionally_resolved_frequenies = np.zeros(len(DNA5_ALPHABET)**subkmer_length)
+            positionally_resolved_frequenies = np.zeros(len(DNA5_ALPHABET)**subkmer_len)
 
         positional_weights = np.arange(1, len(kmer))
-        for i in range(len(kmer) - subkmer_length + 1):
-            subkmer = kmer[i:i + subkmer_length]
+        for i in range(len(kmer) - subkmer_len + 1):
+            subkmer = kmer[i:i + subkmer_len]
             subkmer_idx = kmer_to_index(subkmer)
             positionally_resolved_frequenies[subkmer_idx] += positional_weights[i]
 
@@ -192,7 +192,8 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
         
 
 
-def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None) -> dict:
+def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None, 
+                                            supported_sample_exts: tuple=('.fastq',)) -> dict:
     """
     """
     reads_for_samples = {} # dict
@@ -204,34 +205,91 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
 
     # TODO: use tqdm
     # TODO: improve logging
+    # TODO: run in parallel
     for file in files_in_dir:
         logger.info(f'processing file {file}')
         skip_based_on_filesize = False
         if filesize_lim_mb:
             skip_based_on_filesize = os.path.getsize(os.path.join(indir, file)) / (1024.0 * 1024.0) > filesize_lim_mb
-
-        if os.path.splitext(file)[1] != '.fastq' or skip_based_on_filesize:
-            logger.info(f'skipping {file}')
+        
+        if os.path.splitext(file)[1] not in supported_sample_exts or skip_based_on_filesize:
+            logger.info(f'skipping {file} because not a sample')
             continue
 
         city_code = os.path.basename(file).split('_')[3] # TODO: specific to CAMDA dataset
         sample_name = os.path.splitext(os.path.basename(file))[0]
+        logger.info(f'{sample_name = } DEBUG')
 
         int_label = int(code_to_id[city_code])
 
         logger.info(f'{city_code = } ; {int_label = }')
         logger.info(f'getting reads')
 
-        reads = ut.get_reads_from_fq(os.path.join(indir, file))
+        reads = ut.get_reads_from_fq_or_gzed_fq(os.path.join(indir, file))
         logger.info(f'saving labelled reads')
 
-        if sample_name not in reads_for_samples:
-            reads_for_samples[sample_name] = [int_label, reads]
-        else:
-            reads_for_samples[sample_name][1].extend(reads)
+        reads_for_samples[sample_name] = [int_label, reads]
 
     return reads_for_samples
 
+def samples_from_indir(indir: str, supported_sample_exts: tuple=('.fastq',)) -> tuple[list, dict]:
+    """Get list of sample files and city label to its integer id map.
+    """
+    id_to_code, code_to_id = ut.parse_train_labels(data_path=indir, save_to_json=False) # id_to_code not used here
+    num_classes = len(code_to_id)
+    logger.info(f'{num_classes = }')
+    
+    sample_files = []
+    files_in_dir = os.listdir(indir)
+    for file in files_in_dir:
+        logger.info(f'processing file {file}')
+
+        if os.path.splitext(file)[1] not in supported_sample_exts:
+            logger.info(f'skipping {file} because not a sample')
+            continue
+
+        sample_files.append(os.path.join(indir, file))
+    
+    return sample_files, code_to_id
+
+def get_labelled_reads_from_file(sample: str, code_to_id: dict):
+    """Get reads from a fastq or gzed fastq sample and get sample location integer id.  
+    """
+    logger.info(f'processing file {sample}')
+    city_code = os.path.basename(sample).split('_')[3] # TODO: specific to CAMDA dataset
+    sample_name = os.path.splitext(os.path.basename(sample))[0]
+    logger.info(f'{sample_name = } DEBUG')
+
+    int_label = int(code_to_id[city_code])
+
+    reads = ut.get_reads_from_fq_or_gzed_fq(sample)
+    logger.info(f'returning labelled reads')
+
+    return sample_name, int_label, reads
+
+
+def get_labelled_reads_and_build_graph(sample: str, code_to_id: dict, 
+                                       skip_N: bool = True, outdir: str = None, 
+                                       kmer_len: int = 4,
+                                       subkmer_len: int = 2,
+                                       normalization_method: str = 'max',
+                                       savefile_ext: str = None,
+                                       log_every_n_reads: int = 100_000,
+                                       edge_weight_dtype: torch.dtype = torch.float32,
+                                       node_feature_method: str = 'subkmer_freq',
+                                       normalize_node_features: bool = True,
+                                    ):
+    """Get reads from a sample and build a DBG labelled with a city ID.
+    """
+    sample_name, city_code, reads = get_labelled_reads_from_file(sample, code_to_id)
+
+    build_graph_max(sample_name=sample_name, city_code=city_code, seqs=reads, 
+                    skip_N=skip_N, outdir=outdir,
+                    kmer_len=kmer_len, subkmer_len=subkmer_len, normalization_method=normalization_method, 
+                    savefile_ext=savefile_ext, log_every_n_reads=log_every_n_reads, 
+                    edge_weight_dtype=edge_weight_dtype,
+                    node_feature_method=node_feature_method, 
+                    normalize_node_features=normalize_node_features)
 
 # TODO: move to util
 def get_normalization_val(data: Iterable[int], method: str = 'sum') -> float:
@@ -243,7 +301,7 @@ def get_normalization_val(data: Iterable[int], method: str = 'sum') -> float:
     else:
         raise ValueError(f'Normalization method {method} is not recognized.')
 
-def build_graph_max(dict_item, 
+def build_graph_max(sample_name: str, city_code: int, seqs: list[str],
                     skip_N: bool = True, outdir: str = None, 
                     kmer_len: int = 4,
                     subkmer_len: int = 2,
@@ -294,10 +352,7 @@ def build_graph_max(dict_item,
     feature_method = node_feature_method_selector(node_feature_method, subkmer_len=subkmer_len, 
     skip_N=skip_N, normalize=normalize_node_features)
 
-
-    sample_name, code_and_reads = dict_item
     logger.info(f'processing {sample_name}')
-    city_code, seqs = code_and_reads
     logger.info(f'{city_code = }')
 
     G = nx.DiGraph()
@@ -367,32 +422,26 @@ def build_graph_max(dict_item,
 def main():
 
     args = get_args()
-    params_out = os.path.join(args.outdir, "parameters.json")
-    os.makedirs(args.outdir, exist_ok=True)
 
-    # TODO: use utils functions
-    with open(params_out, "w") as out: 
-        def to_str_if_posix_path(val):
-            if isinstance(val, pathlib.Path):
-                return str(val)
-            return val
-
-        args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
-        json.dump(args_str, out, indent=4)
+    ut.save_run_params_to_json(args, args.outdir, 'run_parameters.json')
 
     logger.setLevel(ut.get_verbosity_level(args.verbose))
-    
 
-    genome_sequences = get_labeled_reads_from_dir_with_samples(args.indir)
+    logger.info(f'getting samples from {args.indir}')
+    sample_paths, city_code_to_id = samples_from_indir(args.indir)
 
+    logger.info(f'building graph in parallel with {args.threads} threads')
     # TODO: use tqdm here instead of inside of functions
     with Pool(processes = args.threads) as p:
-        build_graph_max_wrapper = functools.partial(build_graph_max, skip_N=args.skip_N, outdir=args.outdir,
+
+        get_reads_and_build_graph_wrapper = functools.partial(get_labelled_reads_and_build_graph,
+                                                    code_to_id=city_code_to_id,
+                                                    skip_N=args.skip_N, outdir=args.outdir,
                                                     kmer_len=args.kmer_len, subkmer_len=args.subkmer_len, 
                                                     normalization_method=args.normalization_method, 
                                                     node_feature_method=args.node_feature_method, 
                                                     normalize_node_features=args.normalize_node_features)
-        build_graph_max_result = p.map(build_graph_max_wrapper, genome_sequences.items()) # not used
+        build_graph_max_result = p.map(get_reads_and_build_graph_wrapper, sample_paths) # output list not used
 
     logger.info(f'Finished building graphs. Goodbye :)')
 

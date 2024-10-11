@@ -136,17 +136,8 @@ def validate(model, validation_loader):
 
 def main():
     args = get_args()
-    params_out = os.path.join(args.outfile.parent, "parameters.json")
-    os.makedirs(args.outfile.parent, exist_ok=True)
-    with open(params_out, "w") as out:
 
-        def to_str_if_posix_path(val):
-            if isinstance(val, pathlib.Path):
-                return str(val)
-            return val
-
-        args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
-        json.dump(args_str, out, indent=4)
+    ut.save_run_params_to_json(args, args.outfile.parent, 'run_parameters.json')
 
     logger.setLevel(ut.get_verbosity_level(args.verbose))
 

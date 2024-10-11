@@ -20,15 +20,17 @@ LOGGER_CONFIGURATION = {
     'datefmt': '%d %h %Y %H:%M:%S'
 }
 
-def save_run_params_to_json(args, outfile: str='parameters.json') -> None:
-    params_out = os.path.join(args.outfile.parent, "parameters.json")
-    os.makedirs(args.outfile.parent, exist_ok=True)
+def to_str_if_posix_path(val):
+    if isinstance(val, pathlib.Path):
+        return str(val)
+    return val
 
+def save_run_params_to_json(args, outdir: str, outfile_name: str='parameters.json') -> None:
+    """Save CLI arguments parsed using argparse to a json file.
+    """
+    params_out = os.path.join(outdir, outfile_name)
+    os.makedirs(outdir, exist_ok=True)
     with open(params_out, "w") as out:
-        def to_str_if_posix_path(val):
-            if isinstance(val, pathlib.Path):
-                return str(val)
-            return val
         args_str = {k: to_str_if_posix_path(v) for k, v in vars(args).items()} 
         json.dump(args_str, out, indent=4)
 
@@ -67,6 +69,22 @@ def get_reads_from_gzed_fq(gzed_fq_path: str) -> list[str]:
         for i in range(0, len(fastq_reads), 4):
             reads.append(str(fastq_reads[i + 1].rstrip()))
     return reads
+
+def get_reads_from_fq_or_gzed_fq(sample_path: str) -> list[str]:
+    """Generic fastq reading function.
+    """
+
+    file_ext = sample_path.split(os.extsep, 1)[1]
+
+    print(f'{file_ext = }')
+
+    match file_ext:
+        case 'fastq':
+            return get_reads_from_fq(sample_path)
+        case 'fastq.gz':
+            return get_reads_from_fq_or_gzed_fq(sample_path)
+        case _:
+            raise ValueError(f"{sample_path}: sample extension is not supported")
 
 
 def parse_train_labels(data_path: str, outdir: str = None, save_to_json=True,
