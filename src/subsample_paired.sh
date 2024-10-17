@@ -5,25 +5,20 @@ CONDAPATH=/home/nepotlet/miniconda3/bin
 CONDASTARTPATH=/home/nepotlet/miniconda3/etc/profile.d
 source $CONDASTARTPATH/conda.sh
 
-
 # MODIFY: activate env with seqkit
 echo "activating conda env"
 conda activate kneaddata
 
 # INPUTS
-export INDIR=/scratch/sysbio/camda2020/camda2020/fastp_vk11 # TODO: use complete data
+export INDIR="/scratch/sysbio/camda2020/camda2020/fastp_vk11" # TODO: use complete data
 export PROPORTION_TO_TAKE=0.2 # MODIFY: set proportion of reads to subsample
-export OUTDIR=/scratch2/sysbio/qced_data # MODIFY: set outdir with a unique name
-export PAIRED_SAMPLENAME_SUFFIX=_trimmed
+export OUTDIR="/scratch2/sysbio/qced_data" # MODIFY: set outdir with a unique name
+export INFILE_SUFFIX="_trimmed"
+export SAMPLE_FILENAME_PATTERN="*_1${INFILE_SUFFIX}.fastq.gz"
 
 
-export PROPORTION_INT=$(echo "$PROPORTION_TO_TAKE * 100 / 1" | bc)
+export PROPORTION_INT=$(echo "$PROPORTION_TO_TAKE * 100 / 1" | bc) # get integer representation of the proportion
 mkdir -p $OUTDIR
-
-# MODIFY: (optionally) 
-# set datetime after which downloaded samples will be ignored 
-# (to not process partially downloaded files)
-# export DATETIME="2024-08-08 00:00:00"
 
 process_sample() {
     fwd_path="$1"
@@ -32,7 +27,7 @@ process_sample() {
 
     dir=$(dirname "$fwd_path")
 
-    rev="${fwd/_1${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz/_2${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz}"
+    rev="${fwd/_1${INFILE_SUFFIX}.fastq.gz/_2${INFILE_SUFFIX}.fastq.gz}"
     rev_path="${dir}/${rev}"
     rev_out=${OUTDIR}/${rev%.fastq.gz}_subsampled_${PROPORTION_INT}_percent.fastq
 
@@ -64,6 +59,6 @@ process_sample() {
 
 export -f process_sample
 
-# process ${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz files from the input dir
+# process ${INFILE_SUFFIX}.fastq.gz files from the input dir
 echo "processing samples from $INDIR"
-find $INDIR -name "*_1${PAIRED_SAMPLENAME_SUFFIX}.fastq.gz" -type f | parallel process_sample
+find $INDIR -name "$SAMPLE_FILENAME_PATTERN" -type f | parallel process_sample

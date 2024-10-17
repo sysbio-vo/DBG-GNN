@@ -1,15 +1,21 @@
 #! /bin/bash
 
-# MODIFY: set conda start path
-CONDASTARTPATH=/home/lbombini/micromamba/etc/profile.d
-# MODIFY: set the conda env name with fastp installed
-CONDAENV="gnn"
-# MODIFY: set outdir with a unique name
-export OUTDIR="../fastp_vk11"
+# MODIFY: set your paths here
+CONDAPATH=/home/nepotlet/miniconda3/bin
+CONDASTARTPATH=/home/nepotlet/miniconda3/etc/profile.d
+source $CONDASTARTPATH/conda.sh
 
-source $CONDASTARTPATH/micromamba.sh
-micromamba activate ${CONDAENV}
-mkdir -p ${OUTDIR}
+echo "activating conda env"
+CONDAENV="gnn"
+conda activate $CONDAENV
+
+# INPUTS
+export INDIR="/scratch/sysbio/camda2020/camda2020"
+export OUTDIR="/scratch2/sysbio/fastped_data"
+export OUTFILE_SUFFIX="_trimmed"
+export SAMPLE_FILENAME_PATTERN='*_1.fastq.gz'
+
+mkdir -p $OUTDIR
 
 run_fastp() {
     fwd_path="$1"
@@ -19,9 +25,9 @@ run_fastp() {
     rev="${fwd/_1.fastq.gz/_2.fastq.gz}"
     rev_path="${indir}/${rev}"
 
-    fwd_trimmed="${fwd/_1.fastq.gz/1_trimmed.fastq.gz}"
+    fwd_trimmed="${fwd/_1.fastq.gz/_1${OUTFILE_SUFFIX}.fastq.gz}"
     fwd_trimmed_path="${OUTDIR}/${fwd_trimmed}"
-    rev_trimmed="${rev/_2.fastq.gz/2_trimmed.fastq.gz}"
+    rev_trimmed="${rev/_2.fastq.gz/_2${OUTFILE_SUFFIX}.fastq.gz}"
     rev_trimmed_path="${OUTDIR}/${rev_trimmed}"
 
     # check if the valid output already exists
@@ -42,10 +48,11 @@ run_fastp() {
         return 1
     fi
 
-    echo "Running fastp on ${fwd} and ${rev}"
-    micromamba run -n gnn fastp -i $fwd_path -I $rev_path -o $fwd_trimmed_path -O $rev_trimmed_path
+    echo "Running fastp on ${fwd_path} and ${rev_path}"
+    conda run -n $CONDAENV fastp -i $fwd_path -I $rev_path -o $fwd_trimmed_path -O $rev_trimmed_path
 
 }
 
 export -f run_fastp
-find . -name "*_1.fastq.gz" -type f | parallel run_fastp
+echo "processing samples with fastp from $INDIR"
+find $INDIR -name "$SAMPLE_FILENAME_PATTERN" -type f | parallel run_fastp
