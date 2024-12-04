@@ -82,7 +82,7 @@ def get_reads_from_fq_or_gzed_fq(sample_path: str) -> list[str]:
         case 'fastq':
             return get_reads_from_fq(sample_path)
         case 'fastq.gz':
-            return get_reads_from_fq_or_gzed_fq(sample_path)
+            return get_reads_from_gzed_fq(sample_path)
         case _:
             raise ValueError(f"{sample_path}: sample extension is not supported")
 

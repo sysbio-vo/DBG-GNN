@@ -6,6 +6,7 @@ import logging
 import pathlib
 import argparse
 import functools
+import itertools
 
 import numpy as np
 import networkx as nx
@@ -24,6 +25,11 @@ logger = logging.getLogger(__name__)
 # TODO: move constants to utils
 DNA_ALPHABET = ('A', 'T', 'G', 'C')
 DNA5_ALPHABET = ('A', 'T', 'G', 'C', 'N')
+
+
+# supported sample exts
+# TODO: add more
+SUPPORTED_SAMPLE_EXTS = ('.fastq', '.fastq.gz')
 
 def get_args():
     """Get DBG construction args from the command line using argparse.
@@ -55,33 +61,26 @@ def get_args():
 
 
 # Function to generate k-mers from a sequence
-# TODO: optimize
 def generate_kmers(sequence: str, k: int, skip_N: bool = True) -> list:
-    kmers =  [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
     if skip_N:
-        filtered_kmers = []
-        for kmer in kmers:
-            if 'N' not in kmer:
-                filtered_kmers.append(kmer)
-        return filtered_kmers
-    return kmers
+        return [sequence[i:i+k] for i in range(len(sequence) - k + 1) if 'N' not in sequence[i:i+k]]
+
+    return [sequence[i:i+k] for i in range(len(sequence) - k + 1)]
 
 
-def kmer_to_index(kmer: str, skip_N: bool = True) -> int:
+
+def create_kmer_index(k: int, alphabet: tuple=DNA_ALPHABET) -> dict:
+    all_words = itertools.combinations_with_replacement(alphabet, k)
+    all_words = map(lambda nucleotides: ''.join(nucleotides), all_words)
+
+    return {kmer: idx for idx, kmer in enumerate(all_words)}
+
+
+# TODO urgent: finalize refactoring
+def kmer_to_index(kmer: str, kmer_index: dict) -> int:
     """Converts a kmer (string) to an index.
     """
-    if skip_N:
-        alphabet = DNA_ALPHABET
-    else:
-        alphabet = DNA5_ALPHABET
-
-    base_to_index = {k: v for v, k in enumerate(alphabet)}
-
-    index = 0
-    num_bases = len(alphabet)
-    for char in kmer:
-        index = num_bases * index + base_to_index[char]
-    return index
+    return kmer_to_index[kmer]
 
 # TODO: move to a separate module
 def node_feature_method_selector(method_name: str, *args, **kwargs):
@@ -109,7 +108,7 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
         return frequencies
     
     # "subkmer_freq_positional"
-    def subkmer_frequencies_in_kmer_positioned(kmer: str, subkmer_len: int, skip_N: bool = True, 
+    def subkmer_frequencies_in_kmer_positional(kmer: str, subkmer_len: int, skip_N: bool = True, 
                                             normalize: bool = False) -> np.array:
         """Test naive prototype implementation of sub-k-mer frequencies enhanced with their positional information
         as initial node embeddings.
@@ -139,9 +138,9 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
 
         Usual subkmer-frequency-based embedding for the k-mer in this case is: 
         [0, 0, 1, 0, ..., 2, ..., 1, 0 ]
-            ^          ^       ^
-            |          |       |
-            idx=3        11      15
+            ^             ^       ^
+            |             |       |
+            idx=3         11      15
 
         
         I propose doing the following:
@@ -155,9 +154,9 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
 
         So that the final k-mer embedding looks as follows:
         [0, 0, 1, 0, ..., 7, ..., 2, 0]
-            ^          ^       ^
-            |          |       |
-            idx=3        11      15
+            ^             ^       ^
+            |             |       |
+            idx=3         11      15
 
         TODO: try out normalizing the resulting array
 
@@ -185,15 +184,14 @@ def node_feature_method_selector(method_name: str, *args, **kwargs):
         case 'subkmer_freq':
             picked_method = subkmer_frequencies_in_kmer
         case 'subkmer_freq_positional':
-            picked_method = subkmer_frequencies_in_kmer_positioned
+            picked_method = subkmer_frequencies_in_kmer_positional
 
     return functools.partial(picked_method, *args, **kwargs)
 
         
 
 
-def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None, 
-                                            supported_sample_exts: tuple=('.fastq',)) -> dict:
+def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = None) -> dict:
     """
     """
     reads_for_samples = {} # dict
@@ -212,7 +210,8 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
         if filesize_lim_mb:
             skip_based_on_filesize = os.path.getsize(os.path.join(indir, file)) / (1024.0 * 1024.0) > filesize_lim_mb
         
-        if os.path.splitext(file)[1] not in supported_sample_exts or skip_based_on_filesize:
+        file_ext = '.' + file.split('.', maxsplit=1)[1]
+        if file_ext not in SUPPORTED_SAMPLE_EXTS or skip_based_on_filesize:
             logger.info(f'skipping {file} because not a sample')
             continue
 
@@ -232,7 +231,7 @@ def get_labeled_reads_from_dir_with_samples(indir: str, filesize_lim_mb: int = N
 
     return reads_for_samples
 
-def samples_from_indir(indir: str, supported_sample_exts: tuple=('.fastq',)) -> tuple[list, dict]:
+def samples_from_indir(indir: str) -> tuple[list, dict]:
     """Get list of sample files and city label to its integer id map.
     """
     id_to_code, code_to_id = ut.parse_train_labels(data_path=indir, save_to_json=False) # id_to_code not used here
@@ -244,7 +243,8 @@ def samples_from_indir(indir: str, supported_sample_exts: tuple=('.fastq',)) -> 
     for file in files_in_dir:
         logger.info(f'processing file {file}')
 
-        if os.path.splitext(file)[1] not in supported_sample_exts:
+        file_ext = '.' + file.split('.', maxsplit=1)[1]
+        if file_ext not in SUPPORTED_SAMPLE_EXTS:
             logger.info(f'skipping {file} because not a sample')
             continue
 
