@@ -1,16 +1,15 @@
 import os
-import datetime
+import gzip
 import json
 import pickle
-import gzip
-import functools
 import logging
-import tqdm
 import pathlib
+import datetime
+import functools
 
+import tqdm
 import networkx as nx
 import matplotlib.pyplot as plt
-
 from torch.utils.data import Dataset
 
 

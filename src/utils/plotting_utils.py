@@ -1,6 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 
 def plot_in_row(data: list, titles: list[str], figheight: int = 6) -> mpl.figure.Figure:

@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
+from torch.nn import ReLU, Linear
+from torch_geometric.nn import GATConv, GCNConv, global_mean_pool
 
-from torch.nn import Linear, ReLU
-from torch_geometric.nn import GCNConv, GATConv, global_mean_pool
 
 class GCN_MLP(torch.nn.Module):
     def __init__(self, num_features, num_classes, hidden_channels: int = 32, 

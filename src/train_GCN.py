@@ -1,16 +1,19 @@
-import utils.utils as ut
-import utils.utils_adopted as utad
-import networkx as nx
 import os
-import torch
-import pickle
-import model_zoo as mz
 import json
+import pickle
 import random
+import datetime
+
+import torch
+import networkx as nx
+from sklearn.preprocessing import OneHotEncoder
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils.convert import to_networkx, from_networkx
-import datetime
-from sklearn.preprocessing import OneHotEncoder
+
+import model_zoo as mz
+import utils.utils as ut
+import utils.utils_adopted as utad
+
 
 os.environ['TORCH'] = torch.__version__
 

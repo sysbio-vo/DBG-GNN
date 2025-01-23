@@ -1,19 +1,19 @@
 import os
 import json
-import torch
 import pickle
 import random
 import logging
 import pathlib
 import argparse
+from multiprocessing import Pool
+
+import torch
+from torch_geometric.loader import DataLoader
+from torch_geometric.utils.convert import to_networkx, from_networkx
 
 import model_zoo as mz
 import utils.utils as ut
 import utils.plotting_utils as plut
-
-from multiprocessing import Pool
-from torch_geometric.loader import DataLoader
-from torch_geometric.utils.convert import to_networkx, from_networkx
 
 
 os.environ['TORCH'] = torch.__version__

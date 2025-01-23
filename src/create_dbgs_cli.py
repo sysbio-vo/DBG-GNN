@@ -1,23 +1,22 @@
 import os
 import json
-import torch
 import pickle
 import logging
 import pathlib
 import argparse
 import functools
 import itertools
-
-import numpy as np
-import networkx as nx
-import utils.utils as ut
-
+from collections import Counter, defaultdict
+from collections.abc import Iterable
 # from tqdm import tqdm # TODO: use correctly with multiprocessing
 from multiprocessing import Pool
-from collections.abc import Iterable
-from collections import Counter, defaultdict
+
+import numpy as np
+import torch
+import networkx as nx
 from torch_geometric.utils.convert import from_networkx
 
+import utils.utils as ut
 from node_embedding_methods.sub_k_mer_freq import node_feature_method_selector
 
 

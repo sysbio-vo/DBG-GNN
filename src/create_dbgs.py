@@ -1,10 +1,11 @@
-import utils.utils as ut
-import utils.utils_adopted as utad
-import time
 import os
-from multiprocessing import Process, Pool
+import time
 import pickle
 import functools
+from multiprocessing import Pool, Process
+
+import utils.utils as ut
+import utils.utils_adopted as utad
 
 
 def build_dbg_adopted_with_label(infile: str, k:int = 10, city_code_to_int: dict = None) -> object:

@@ -3,15 +3,16 @@ Taken from https://github.com/ratschlab/genomic-gnn
 """
 
 
-from collections import defaultdict
-from tqdm import tqdm
-import networkx as nx
-import numpy as np
-import random
-import torch
-from itertools import product
 import os
-from typing import Tuple, Dict
+import random
+from typing import Dict, Tuple
+from itertools import product
+from collections import defaultdict
+
+import numpy as np
+import torch
+import networkx as nx
+from tqdm import tqdm
 
 
 ALPHABET = ["A", "C", "G", "T"]

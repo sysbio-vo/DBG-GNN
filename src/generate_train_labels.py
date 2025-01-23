@@ -1,6 +1,7 @@
 import os
 import json
 
+
 data_path = '/home/sysbio/camda2020/camda2020_tiny'
 
 unique_codes = set()

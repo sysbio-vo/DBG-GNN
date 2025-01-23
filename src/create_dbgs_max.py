@@ -1,22 +1,22 @@
-import random
-import functools
-import networkx as nx
-import numpy as np
-import torch
-from torch_geometric.utils.convert import from_networkx
-import random
-import networkx as nx
-from collections import Counter, defaultdict
-from torch_geometric.loader import DataLoader
-from torch.nn import Linear
-import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
-from torch_geometric.nn import global_mean_pool
-import utils.utils as ut
 import os
 import pickle
+import random
 import datetime
-from multiprocessing import Process, Pool
+import functools
+from collections import Counter, defaultdict
+from multiprocessing import Pool, Process
+
+import numpy as np
+import torch
+import networkx as nx
+import torch.nn.functional as F
+from torch.nn import Linear
+from torch_geometric.nn import GCNConv, global_mean_pool
+from torch_geometric.loader import DataLoader
+from torch_geometric.utils.convert import from_networkx
+
+import utils.utils as ut
+
 
 # Function to generate k-mers from a sequence
 def generate_kmers(sequence, k, skip_N=True):

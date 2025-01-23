@@ -1,9 +1,11 @@
 
 import functools
-import numpy as np
 from enum import IntEnum
-from collections import Counter
 from typing import Any
+from collections import Counter
+
+import numpy as np
+
 from create_dbgs_cli import DNA_ALPHABET, DNA5_ALPHABET, kmer_to_index
 
 
